@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>救急車ベッドサイドモニター シミュレーター</title>
+<style>
+:root{--ecg:#3dff6e;--bp:#ff6b5e;--spo2:#3fe6ff;--co2:#ffe24a;--rr:#fff3a6}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0b0e13;color:#e8edf3;font-family:-apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic UI",Meiryo,sans-serif}
+body.m-monitor{background:#000;overflow:hidden;height:100%}
+.hidden{display:none!important}
+
+/* ===== Monitor ===== */
+.monitor{container-type:size;position:relative;background:#000;color:#fff;display:grid;grid-template-rows:6.5cqh 1fr 5cqh;overflow:hidden;user-select:none;-webkit-user-select:none;font-family:"Arial Narrow","Roboto Condensed","Helvetica Neue",Arial,sans-serif}
+body.m-monitor .monitor{position:fixed;inset:0}
+.mtop{display:flex;align-items:center;gap:2cqw;padding:0 1.5cqw;font-size:3cqh;background:#0d1a2e;color:#cfe0ff;border-bottom:1px solid #22324a;min-width:0}
+.mtop .bed{font-weight:700;white-space:nowrap}
+.alarmbar{flex:1;display:flex;align-items:center;justify-content:center;height:80%;border-radius:.6cqh;font-weight:700;font-size:3.3cqh;white-space:nowrap;overflow:hidden;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif}
+.alarmbar.high{background:#e0001b;color:#fff;animation:blink 1s steps(1) infinite}
+.alarmbar.mid{background:#ffd400;color:#000}
+.alarmbar.sil{animation:none}
+@keyframes blink{50%{background:#7a0010}}
+.mtop .clock{font-size:3.4cqh;font-weight:700;font-variant-numeric:tabular-nums}
+.mmain{display:grid;grid-template-columns:36% 1fr;min-height:0}
+.nums{display:grid;grid-template-rows:1.35fr 1fr 1.1fr 1fr;border-right:2px solid #1b2433;min-height:0}
+.panel{position:relative;border-bottom:1px solid #1b2433;overflow:hidden;min-height:0}
+.panel::before{content:"";position:absolute;inset:0;opacity:0;pointer-events:none}
+.panel.al-mid::before{background:#ffd400;animation:fl 1s steps(1) infinite}
+.panel.al-high::before{background:#ff0022;animation:fl .6s steps(1) infinite}
+@keyframes fl{0%{opacity:.45}50%{opacity:0}}
+.panel .lbl{position:absolute;left:1.2cqw;top:.8cqh;font-size:3.2cqh;font-weight:700;white-space:nowrap}
+.panel .lbl small{font-size:2.2cqh;font-weight:400;opacity:.8;margin-left:.4em}
+.panel .lims{position:absolute;left:1.2cqw;top:5.2cqh;font-size:2.2cqh;line-height:1.15;opacity:.7;font-variant-numeric:tabular-nums}
+.panel .val{position:absolute;right:1.5cqw;bottom:.4cqh;font-weight:700;line-height:.9;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.p-hr{color:var(--ecg)} .p-hr .val{font-size:22cqh}
+.p-bp{color:var(--bp)} .p-bp .val{font-size:11.5cqh}
+.p-bp .map{position:absolute;right:1.5cqw;top:1cqh;font-size:5cqh;font-weight:700;font-variant-numeric:tabular-nums}
+.p-bp .bpstat{position:absolute;left:1.2cqw;top:5.4cqh;font-size:2.6cqh;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif}
+.p-bp .val.dim{opacity:.35}
+.p-spo2{color:var(--spo2)} .p-spo2 .val{font-size:17cqh}
+.resp{display:grid;grid-template-columns:1fr 1fr;min-height:0}
+.resp .panel{border-bottom:none}
+.resp.no-et{grid-template-columns:1fr}
+.resp.no-et .p-et{display:none}
+.p-et{color:var(--co2);border-right:1px solid #1b2433} .p-et .val{font-size:12cqh}
+.p-rr{color:var(--rr)} .p-rr .val{font-size:12cqh}
+.resp.no-et .p-rr .val{font-size:13cqh}
+.waves{display:flex;flex-direction:column;min-height:0;min-width:0}
+.wave{position:relative;flex:1;min-height:0;border-bottom:1px solid #10161f}
+.w-ecg{flex:1.8}
+.wave canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.wlbl{position:absolute;left:1cqw;top:.6cqh;font-size:2.6cqh;font-weight:700;z-index:1}
+.w-ecg .wlbl{color:var(--ecg)} .w-pl .wlbl{color:var(--spo2)} .w-co2 .wlbl{color:var(--co2)}
+.waves.no-et .w-co2{display:none}
+.co2top{position:absolute;left:0;right:0;top:13%;border-top:1px dashed rgba(255,226,74,.35)}
+.co2top span,.co2bot{position:absolute;right:.8cqw;font-size:2cqh;color:rgba(255,226,74,.7)}
+.co2top span{top:.2cqh}
+.co2bot{bottom:.4cqh}
+.mbot{display:flex;align-items:center;gap:1.5cqw;padding:0 1.5cqw;font-size:2.5cqh;color:#8a99ad;background:#0a0f17;border-top:1px solid #1b2433;white-space:nowrap;overflow:hidden;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif}
+.mbot .sp{flex:1}
+.mbot button{font:inherit;background:#1c2737;color:#dfe7f2;border:1px solid #2e3d52;border-radius:.6cqh;padding:.2cqh 1.2cqw;cursor:pointer}
+.startov{position:absolute;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;text-align:center;font-size:4.5cqh;cursor:pointer;z-index:5;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;line-height:1.6}
+.startov small{font-size:2.8cqh;opacity:.8}
+
+/* ===== Control ===== */
+.ctrl{max-width:560px;margin:0 auto;padding:12px 12px 0}
+.chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.chead h1{font-size:18px;margin:0;flex:1 0 auto;white-space:nowrap}
+.chead a{color:#7fb6ff;font-size:13px}
+.conn{font-size:12px;padding:4px 10px;border-radius:99px;background:#1d2633;color:#b9c6d4}
+.conn.ok{background:#0f3d24;color:#7dffb0}
+.ctrl section{background:#141a23;border:1px solid #232c39;border-radius:12px;padding:12px;margin:10px 0}
+.ctrl h3{margin:0 0 6px;font-size:13px;color:#9fb3c8;letter-spacing:.05em}
+.f{display:flex;align-items:center;gap:10px;margin:8px 0}
+.f > .l{width:72px;flex:none;font-size:14px;color:#c9d6e3}
+.ctrl select,.ctrl input[type=number]{background:#0b0f15;color:#fff;border:1px solid #2d3949;border-radius:8px;font-size:16px;padding:9px 10px;min-width:0}
+.ctrl select{flex:1}
+.ctrl select:disabled,.ctrl input:disabled{opacity:.4}
+.num{display:flex;align-items:stretch;flex:1;min-width:0}
+.num input{width:100%;text-align:center;font-size:20px!important;font-weight:700;border-radius:0!important}
+.num button{width:48px;flex:none;background:#223044;color:#fff;border:1px solid #2d3949;font-size:22px;cursor:pointer;touch-action:manipulation}
+.num button:first-child{border-radius:8px 0 0 8px}
+.num button:last-child{border-radius:0 8px 8px 0}
+.unit{font-size:12px;color:#8193a7;width:40px;flex:none}
+.hint{font-size:12px;color:#8fa6bd;margin:-2px 0 6px 82px;min-height:0}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:10px 0;color:#c9d6e3}
+.chk input{width:20px;height:20px;flex:none}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{background:#1d2735;color:#dbe6f2;border:1px solid #2f3d50;border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
+.btn{background:#24344a;color:#fff;border:1px solid #35496a;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer}
+.cbar{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;padding:10px 0 calc(10px + env(safe-area-inset-bottom));background:linear-gradient(to top,#0b0e13 75%,rgba(11,14,19,0));z-index:10}
+.cbar .st{flex:1;font-size:12px;color:#9fb0c2;line-height:1.4}
+.cbar .apply{background:#1f6feb;border:none;color:#fff;font-size:18px;font-weight:700;padding:13px 30px;border-radius:10px;cursor:pointer}
+.cbar .apply.dirty{background:#ff8a00}
+.cbar .sil{background:#3a2430;border:1px solid #6b3b4f;color:#ffd0dc;padding:13px 14px;border-radius:10px;font-size:14px;cursor:pointer;white-space:nowrap}
+.cbar .sil.on{background:#c0263f;color:#fff;border-color:#ff6b84}
+.ctrl details summary{cursor:pointer;color:#9fb3c8;font-size:14px;margin-top:6px}
+.limgrid{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 8px;align-items:center;font-size:13px;margin-top:8px}
+.limgrid input{width:100%;font-size:15px!important;padding:6px!important}
+.ctrl input[type=range]{flex:1}
+
+/* ===== Demo ===== */
+.dhead{max-width:1500px;margin:0 auto;padding:12px 12px 0;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}
+.dhead h1{font-size:18px;margin:0}
+.dhead a{color:#7fb6ff;font-size:13px}
+.dhead p{margin:0;font-size:12px;color:#8fa6bd;flex-basis:100%}
+.demo-wrap{display:grid;gap:12px;padding:12px;max-width:1500px;margin:0 auto}
+.monwrap{position:sticky;top:0;z-index:20;background:#0b0e13;padding-bottom:6px}
+.monwrap .monitor{width:100%;aspect-ratio:16/9;border-radius:8px;border:5px solid #d9dde3}
+.demo-wrap .ctrl{padding:0;max-width:none}
+@media(min-width:1000px){.demo-wrap{grid-template-columns:1fr 420px;align-items:start}.monwrap{top:12px}}
+</style>
+</head>
+<body>
+<script>
+(() => {
+'use strict';
+
+/* ================= 基本設定 ================= */
+const qs = new URLSearchParams(location.search);
+const MODE = (qs.get('mode') || 'demo').toLowerCase();
+const $ = (s, r = document) => r.querySelector(s);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const TAU = Math.PI * 2;
+const SR = 500;        // 波形サンプリング(Hz)
+const SWEEP = 6;       // 画面1掃引の秒数
+const pad2 = n => String(n).padStart(2, '0');
+const hhmm = d => pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+const nowS = () => performance.now() / 1000;
+const store = {
+  get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+const RHYTHM_GROUPS = [
+  ['洞調律', [
+    ['sinus', '洞調律', 75, ''],
+    ['stach', '洞性頻脈', 130, ''],
+    ['sbrady', '洞性徐脈', 45, ''],
+  ]],
+  ['ブロック', [
+    ['sab', '洞房ブロック', 70, '時々 P-QRS がまるごと脱落します'],
+    ['avb1', '1度房室ブロック', 70, 'PR 0.32秒'],
+    ['wenck', '2度AVB ウェンケバッハ型', 60, 'PRが徐々に延長→QRS脱落（4:3）。HR＝心室レート'],
+    ['mobitz2', '2度AVB モビッツII型', 50, 'PR一定のまま突然QRS脱落（4:3）'],
+    ['avb21', '2:1 房室ブロック', 40, '心房レート＝HRの2倍'],
+    ['avb3', '3度（完全）房室ブロック', 35, 'HR＝心室補充調律（幅広QRS）。P波は80/分で独立'],
+    ['rbbb', '右脚ブロック', 75, ''],
+    ['lbbb', '左脚ブロック', 75, ''],
+  ]],
+  ['頻脈性不整脈', [
+    ['af', '心房細動 (AF)', 110, 'HR＝平均心拍数（RR不整）'],
+    ['afl', '心房粗動 (AFL)', 75, '粗動波300/分。HRに近い伝導比で表示（150＝2:1／100＝3:1／75＝4:1）'],
+    ['psvt', '発作性上室頻拍 (PSVT)', 180, ''],
+    ['vt', '心室頻拍 (VT・脈あり)', 170, ''],
+  ]],
+  ['心停止', [
+    ['vf_c', '心室細動 (VF・粗い)', 0, '脈波・SpO2・血圧は自動で消失'],
+    ['vf_f', '心室細動 (VF・細かい)', 0, '脈波・SpO2・血圧は自動で消失'],
+    ['pvt', '無脈性VT', 190, '脈波・SpO2・血圧は自動で消失'],
+    ['pea', '無脈性電気活動 (PEA)', 40, '心電図は出るが脈波・血圧は消失'],
+    ['asys', '心静止', 0, ''],
+  ]],
+  ['ペーシング', [
+    ['pace_v', '心室ペーシング (VVI)', 60, 'HR＝ペーシングレート'],
+    ['pace_av', '房室順次ペーシング (DDD)', 70, 'HR＝ペーシングレート'],
+    ['pace_fail', 'ペーシング不全（捕捉不全）', 60, 'スパイク後にQRSが出ないことがあります'],
+  ]],
+];
+const RINFO = {};
+RHYTHM_GROUPS.forEach(([, items]) => items.forEach(([id, label, hr, hint]) => RINFO[id] = { label, hr, hint }));
+const PULSELESS = new Set(['vf_c', 'vf_f', 'pvt', 'pea', 'asys']);
+const NO_HR = new Set(['vf_c', 'vf_f', 'asys']);
+const ECT_OK = new Set(['sinus', 'stach', 'sbrady', 'avb1', 'rbbb', 'lbbb', 'af']);
+const WIDE_OK = new Set(['sinus', 'stach', 'sbrady', 'sab', 'avb1', 'wenck', 'mobitz2', 'avb21', 'af', 'afl']);
+const ECTOPY = [
+  ['none', 'なし'], ['pvc_single', 'PVC（散発）'], ['pvc_bi', 'PVC 二段脈'], ['pvc_tri', 'PVC 三段脈'],
+  ['pvc_couplet', 'PVC 2連発（カプレット）'], ['pvc_run', 'PVC ショートラン（3〜5連）'], ['pvc_multi', '多源性PVC'], ['pac', 'PAC（散発）'],
+];
+const DEFAULT_STATE = {
+  rhythm: 'sinus', hr: 75, qrsWide: false, ectopy: 'none', stMode: 'none', stMm: 2,
+  sbp: 120, dbp: 80, nibpOnApply: true, nibpInterval: 0,
+  spo2: 98, pulse: 'auto', rr: 16, etco2On: false, etco2: 38,
+  transition: 10, jitter: true, syncVol: 50, alarmVol: 60, alarmOn: true, silenceSync: true, bed: '救急車',
+  lim: { hrL: 50, hrH: 120, sbpL: 90, sbpH: 180, spo2L: 90, rrL: 8, rrH: 30, etL: 25, etH: 50 }
+};
+const PRESETS = [
+  ['正常', { rhythm: 'sinus', hr: 75, ectopy: 'none', stMode: 'none', sbp: 122, dbp: 78, spo2: 98, rr: 16, etco2: 38, pulse: 'auto' }],
+  ['ショック', { rhythm: 'stach', hr: 128, ectopy: 'none', stMode: 'none', sbp: 78, dbp: 48, spo2: 93, rr: 28, etco2: 26, pulse: 'auto' }],
+  ['STEMI', { rhythm: 'sinus', hr: 92, ectopy: 'pvc_single', stMode: 'up', stMm: 3, sbp: 104, dbp: 70, spo2: 95, rr: 22, etco2: 34, pulse: 'auto' }],
+  ['低酸素', { rhythm: 'stach', hr: 118, ectopy: 'none', stMode: 'down', stMm: 1.5, sbp: 146, dbp: 92, spo2: 84, rr: 32, etco2: 30, pulse: 'auto' }],
+  ['完全AVB', { rhythm: 'avb3', hr: 34, ectopy: 'none', stMode: 'none', sbp: 84, dbp: 50, spo2: 95, rr: 18, pulse: 'auto' }],
+  ['VF', { rhythm: 'vf_c', ectopy: 'none', stMode: 'none', pulse: 'auto' }],
+  ['心静止', { rhythm: 'asys', ectopy: 'none', stMode: 'none', pulse: 'auto' }],
+  ['ROSC', { rhythm: 'sinus', hr: 108, ectopy: 'pvc_single', stMode: 'none', sbp: 96, dbp: 58, spo2: 93, rr: 12, etco2On: true, etco2: 42, pulse: 'auto' }],
+];
+const fullState = s => {
+  const o = Object.assign({}, DEFAULT_STATE, s || {});
+  o.lim = Object.assign({}, DEFAULT_STATE.lim, (s && s.lim) || {});
+  return o;
+};
+
+/* ================= 同期（BroadcastChannel / localStorage / サーバーSSE） ================= */
+const Sync = {
+  listeners: [], seen: new Set(), server: false, connected: false, statusCb: null,
+  init() {
+    try { this.bc = new BroadcastChannel('ems-bsm'); this.bc.onmessage = e => this._recv(e.data); } catch (e) {}
+    window.addEventListener('storage', e => {
+      if (e.key === 'ems-bsm-msg' && e.newValue) { try { this._recv(JSON.parse(e.newValue)); } catch (_) {} }
+    });
+    if (location.protocol.startsWith('http')) this._probe();
+  },
+  async _probe() {
+    try {
+      const r = await fetch('api/ping', { cache: 'no-store' });
+      if (r.ok) { const j = await r.json(); if (j && j.ok) { this.server = true; this._sse(); } }
+    } catch (e) {}
+    this._st();
+  },
+  _sse() {
+    const es = new EventSource('api/events');
+    es.onmessage = e => { try { this._recv(JSON.parse(e.data)); } catch (_) {} };
+    es.onopen = () => { this.connected = true; this._st(); };
+    es.onerror = () => { this.connected = false; this._st(); };
+  },
+  _st() { if (this.statusCb) this.statusCb(); },
+  send(msg) {
+    msg.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    this.seen.add(msg.id);
+    try { this.bc && this.bc.postMessage(msg); } catch (e) {}
+    if (msg.type !== 'hb') { try { localStorage.setItem('ems-bsm-msg', JSON.stringify(msg)); } catch (e) {} }
+    if (this.server) {
+      fetch('api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) }).catch(() => {});
+    }
+    if (MODE === 'demo') this._dispatch(msg);
+  },
+  _recv(msg) {
+    if (!msg || !msg.id || this.seen.has(msg.id)) return;
+    this.seen.add(msg.id);
+    if (this.seen.size > 600) this.seen = new Set([...this.seen].slice(-200));
+    this._dispatch(msg);
+  },
+  _dispatch(msg) { this.listeners.forEach(f => { try { f(msg); } catch (e) { console.error(e); } }); },
+  on(f) { this.listeners.push(f); }
+};
+
+/* ================= 音 ================= */
+const Snd = {
+  ctx: null,
+  unlock() {
+    if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) this.ctx = new AC(); }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tone(freq, dur, vol, delay = 0, type = 'sine') {
+    const c = this.ctx; if (!c || vol <= 0) return;
+    const t0 = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.006);
+    g.gain.setValueAtTime(vol, t0 + Math.max(0.01, dur - 0.012));
+    g.gain.linearRampToValueAtTime(0, t0 + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  }
+};
+
+/* ================= 波形部品 ================= */
+class Track {
+  constructor() { this.comps = []; }
+  g(c, s, a) { this.comps.push({ k: 0, c, s, a, st: c - 4 * s, en: c + 4 * s }); }
+  seg(a0, a1, a, r, r2 = r) { const L = a1 - a0; if (r + r2 > L) { const k = L / (r + r2); r *= k; r2 *= k; } this.comps.push({ k: 1, a0, a1, a, r, r2, st: a0, en: a1 }); }
+  rect(a0, a1, a) { this.comps.push({ k: 2, st: a0, en: a1, a }); }
+  val(t) {
+    let v = 0;
+    for (const c of this.comps) {
+      if (t < c.st || t > c.en) continue;
+      if (c.k === 0) { const z = (t - c.c) / c.s; v += c.a * Math.exp(-0.5 * z * z); }
+      else if (c.k === 1) {
+        let f = 1;
+        if (t < c.a0 + c.r) f = 0.5 - 0.5 * Math.cos(Math.PI * (t - c.a0) / c.r);
+        else if (t > c.a1 - c.r2) f = 0.5 - 0.5 * Math.cos(Math.PI * (c.a1 - t) / c.r2);
+        v += c.a * f;
+      } else v += c.a;
+    }
+    return v;
+  }
+  prune(t) { if (this.comps.length) this.comps = this.comps.filter(c => c.en >= t); }
+  dropFuture(t) { this.comps = this.comps.filter(c => c.st <= t); }
+}
+
+/* リズム定義
+   p:P波 pr:PR時間 k:QRS形 ect:期外収縮可 varb:呼吸性変動 irr:RR不整 drop:洞房ブロック
+   atrial:独立心房レート flutter:粗動 s:脈の強さ as/vs:心房/心室スパイク fail:捕捉不全率 */
+const SIMPLE = {
+  sinus: { p: 1, pr: .16, k: 'narrow', ect: 1, varb: .03 },
+  stach: { p: 1, pr: .13, k: 'narrow', ect: 1, varb: .012 },
+  sbrady: { p: 1, pr: .18, k: 'narrow', ect: 1, varb: .04 },
+  sab: { p: 1, pr: .16, k: 'narrow', varb: .02, drop: 1 },
+  avb1: { p: 1, pr: .32, k: 'narrow', ect: 1, varb: .02 },
+  rbbb: { p: 1, pr: .16, k: 'rbbb', ect: 1, varb: .02 },
+  lbbb: { p: 1, pr: .16, k: 'lbbb', ect: 1, varb: .02 },
+  avb3: { k: 'escape', atrial: 80 },
+  af: { k: 'narrow', ect: 1, irr: .3 },
+  afl: { k: 'narrow', flutter: 1 },
+  psvt: { k: 'narrow' },
+  vt: { k: 'vt', s: .55 },
+  pvt: { k: 'vt', s: .55 },
+  pea: { p: 1, pr: .2, k: 'pea' },
+  pace_v: { k: 'paced', vs: 1 },
+  pace_av: { p: 1, pr: .16, as: 1, vs: 1, k: 'paced' },
+  pace_fail: { k: 'paced', vs: 1, fail: .45 },
+};
+const PDRIVE = {
+  wenck: { ratio: 4 / 3, prs: [.16, .26, .34, null] },
+  mobitz2: { ratio: 4 / 3, prs: [.18, .18, .18, null] },
+  avb21: { ratio: 2, prs: [.18, null] },
+};
+
+class Gen {
+  constructor() {
+    this.tr = new Track(); this.events = []; this.wide = false;
+    this.rhythm = 'sinus'; this.ectopy = 'none'; this.st = 0; this.jitter = true;
+    this.hrAt = () => 75; this.lastQ = 0; this.reset(0);
+  }
+  reset(now) { this.nextBeat = now + 0.3; this.nextP = now + 0.15; this.n = 0; this.pc = 0; this.since = 0; }
+  setRhythm(r, now) {
+    if (r === this.rhythm) return;
+    this.rhythm = r;
+    this.tr.dropFuture(now);
+    this.events = this.events.filter(e => e.t <= now);
+    this.reset(now);
+    this.nextBeat = Math.max(now + 0.25, this.lastQ + 0.4);
+  }
+  rrNow(t) { return 60 / clamp(this.hrAt(t), 10, 300); }
+  pushEvent(e) { const ev = this.events; let i = ev.length; while (i > 0 && ev[i - 1].t > e.t) i--; ev.splice(i, 0, e); }
+  P(t0, a = 0.13) { this.tr.g(t0 + 0.045, 0.021, a); }
+  /* ST変化：J点を基線からずらす（j=R下行脚の位置, te=T終末） */
+  stShape(j, te, qt, rj = .012) {
+    const T = this.tr, st = this.st;
+    if (st > 0) {
+      // 上昇：Sが基線まで戻らず高位のまま、ドーム状にTへ移行
+      T.seg(j, te, st, rj, .07);
+      T.g(te - .1, .05, .18 + st * .25);
+    } else {
+      // 低下：Sが基線より下がったまま、緩やかに上行してTへ
+      T.seg(j, te - .06, st, rj, .14);
+      T.g(te - .05, .045, .22);
+    }
+  }
+  beat(q, kind, rr, s = 1, variant = 0) {
+    const T = this.tr, qt = clamp(0.4 * Math.sqrt(rr), 0.24, 0.46);
+    if (kind === 'narrow' && this.wide) kind = 'wide';
+    switch (kind) {
+      case 'wide': {
+        T.g(q + .012, .008, -.06); T.g(q + .065, .03, 1.05);
+        if (this.st) { if (this.st < 0) T.g(q + .128, .014, -.1); this.stShape(q + .07, q + qt + .03, qt, .045); }
+        else { T.g(q + .128, .014, -.1); T.g(q + qt - .05, .05, .26); }
+        break;
+      }
+      case 'narrow': {
+        T.g(q + .012, .006, -.08); T.g(q + .036, .0085, 1.15);
+        if (this.st > 0) this.stShape(q + .047, q + qt + .01, qt);
+        else if (this.st < 0) { T.g(q + .059, .008, -.26); this.stShape(q + .055, q + qt + .01, qt); }
+        else { T.g(q + .059, .008, -.26); T.g(q + qt - .085, .045, .28); }
+        break;
+      }
+      case 'rbbb':
+        T.g(q + .025, .008, .7); T.g(q + .052, .010, -.32); T.g(q + .09, .014, .48);
+        if (this.st) T.seg(q + .11, q + qt - .03, this.st, .03);
+        T.g(q + qt - .07, .05, .16); break;
+      case 'lbbb':
+        T.g(q + .04, .018, .82); T.g(q + .088, .019, .86); T.g(q + qt - .05, .055, -.3); break;
+      case 'pvc': {
+        const V = [[.06, .036, 1.35, .14, .026, -.35, .36, -.5], [.04, .022, -.3, .1, .038, -1.15, .36, .45], [.05, .028, .95, .12, .032, -.9, .37, .35]][variant % 3];
+        T.g(q + V[0], V[1], V[2]); T.g(q + V[3], V[4], V[5]); T.g(q + V[6], .06, V[7]); break;
+      }
+      case 'escape':
+        T.g(q + .06, .034, .95); T.g(q + .14, .026, -.25); T.g(q + .38, .065, -.35); break;
+      case 'paced':
+        T.g(q + .055, .03, 1.0); T.g(q + .13, .034, -.4); T.g(q + .37, .06, -.35); break;
+      case 'vt': {
+        const w = clamp(rr / .36, .55, 1.2);
+        T.g(q + .06 * w, .035 * w, 1.3); T.g(q + .17 * w, .045 * w, -.75); break;
+      }
+      case 'pea':
+        T.g(q + .03, .013, .55); T.g(q + .075, .014, -.18); T.g(q + qt - .04, .06, .14); break;
+    }
+    this.lastQ = q;
+    this.pushEvent({ t: q + .04, s, rr });
+  }
+  schedule(now) {
+    const H = now + 0.7;
+    if (SIMPLE[this.rhythm]) this.schedSimple(H);
+    else if (PDRIVE[this.rhythm]) this.schedP(H);
+    this.tr.prune(now - 0.05);
+  }
+  schedSimple(H) {
+    const c = SIMPLE[this.rhythm];
+    if (c.atrial) {
+      if (this.nextP < H - 3) this.nextP = H - 0.6;
+      while (this.nextP < H) { this.P(this.nextP); this.nextP += 60 / c.atrial * (this.jitter ? 1 + (Math.random() - .5) * .03 : 1); }
+    }
+    if (this.nextBeat < H - 3) this.nextBeat = H - 0.6;
+    let guard = 0;
+    while (this.nextBeat < H && guard++ < 50) {
+      let rr = this.rrNow(this.nextBeat);
+      let q = this.nextBeat;
+      if (c.flutter) { const ratio = clamp(Math.round(300 / (60 / rr)), 2, 8); rr = ratio * .2; q = Math.ceil(q * 5 - 1e-6) / 5 + .06; }
+      this.n++;
+      if (c.ect && this.ectopy !== 'none' && this.lastQ > 0) {
+        const e = this.ectDecide(c);
+        if (e) { this.ectFire(e, rr, c); continue; }
+      }
+      this.since++;
+      if (c.drop && this.n % 7 === 0) { this.nextBeat = q + rr; continue; }
+      if (c.p) { if (c.as) this.tr.rect(q - c.pr - .004, q - c.pr, .9); this.P(q - c.pr); }
+      if (c.vs) this.tr.rect(q - .004, q, 1.4);
+      const cap = !(c.fail && Math.random() < c.fail);
+      if (cap) this.beat(q, c.k, rr, c.s || 1);
+      let nx = rr;
+      if (c.irr) nx = rr * (1 + (Math.random() * 2 - 1) * c.irr);
+      else if (c.varb && this.jitter) nx = rr * (1 + c.varb * Math.sin(q * 1.3) + (Math.random() - .5) * .012);
+      this.nextBeat = c.flutter ? q + rr - .06 : q + Math.max(nx, .28);
+    }
+  }
+  ectDecide(c) {
+    const n = this.n, s = this.since, R = Math.random();
+    switch (this.ectopy) {
+      case 'pvc_bi': return n % 2 === 0 ? 'pvc' : null;
+      case 'pvc_tri': return n % 3 === 0 ? 'pvc' : null;
+      case 'pvc_single': return s >= 3 && R < .18 ? 'pvc' : null;
+      case 'pvc_multi': return s >= 2 && R < .25 ? 'pvcm' : null;
+      case 'pvc_couplet': return s >= 4 && R < .2 ? 'couplet' : null;
+      case 'pvc_run': return s >= 5 && R < .15 ? 'run' : null;
+      case 'pac': return c.p && s >= 3 && R < .18 ? 'pac' : null;
+    }
+    return null;
+  }
+  ectFire(e, rr, c) {
+    const lq = this.lastQ, cp = Math.min(Math.max(.62 * rr, .36), .82 * rr);
+    this.since = 0;
+    const resume = (tEnd, frac) => {
+      if (c.p) { let nb = this.nextBeat; while (nb < tEnd + frac * rr) nb += rr; this.nextBeat = nb; }
+      else this.nextBeat = tEnd + rr * 1.05;
+    };
+    if (e === 'pvc' || e === 'pvcm') {
+      const q = lq + cp;
+      this.beat(q, 'pvc', rr, .35, e === 'pvcm' ? Math.floor(Math.random() * 3) : 0);
+      resume(q, .5);
+    } else if (e === 'couplet') {
+      const q1 = lq + cp, q2 = q1 + Math.max(.38, .5 * rr);
+      this.beat(q1, 'pvc', rr, .3); this.beat(q2, 'pvc', rr, .12);
+      resume(q2, .6);
+    } else if (e === 'run') {
+      const k = 3 + Math.floor(Math.random() * 3); let q = lq + cp;
+      for (let i = 0; i < k; i++) { this.beat(q, 'pvc', .38, .12); q += .38; }
+      resume(q - .38, .7);
+    } else if (e === 'pac') {
+      const q = lq + Math.max(.65 * rr, .36);
+      this.P(q - .13, .09);
+      this.beat(q, c.k, rr, .75);
+      this.nextBeat = q + rr;
+    }
+  }
+  schedP(H) {
+    const c = PDRIVE[this.rhythm];
+    if (this.nextP < H - 3) this.nextP = H - 0.6;
+    let guard = 0;
+    while (this.nextP < H && guard++ < 50) {
+      const hr = clamp(this.hrAt(this.nextP), 10, 250);
+      const pp = 60 / (hr * c.ratio);
+      const pr = c.prs[this.pc % c.prs.length];
+      this.P(this.nextP);
+      if (pr != null) this.beat(this.nextP + pr, 'narrow', 60 / hr, 1);
+      this.nextP += pp; this.pc++;
+    }
+  }
+  vf(t, A) {
+    const p1 = TAU * (5.2 * t + 0.9 * Math.sin(TAU * 0.13 * t));
+    const p2 = TAU * (3.7 * t + 0.6 * Math.sin(TAU * 0.21 * t + 1));
+    const env = 0.65 + 0.35 * Math.sin(TAU * 0.17 * t) * Math.sin(TAU * 0.07 * t + 0.5);
+    return A * env * (0.7 * Math.sin(p1) + 0.45 * Math.sin(p2 + 1.1) + 0.2 * Math.sin(TAU * 7.3 * t));
+  }
+  value(t) {
+    let v = this.tr.val(t) + (Math.random() - .5) * .012;
+    if (this.jitter) v += 0.025 * Math.sin(TAU * 0.21 * t) + 0.012 * Math.sin(TAU * 0.53 * t + 1);
+    switch (this.rhythm) {
+      case 'af': v += 0.045 * Math.sin(TAU * 6.1 * t) + 0.03 * Math.sin(TAU * 7.7 * t + 1.3) + 0.025 * Math.sin(TAU * 4.9 * t + 2.1); break;
+      case 'afl': { const ph = (t * 5) % 1; v += ph < .8 ? .12 - .3 * (ph / .8) : -.18 + .3 * ((ph - .8) / .2); break; }
+      case 'vf_c': v += this.vf(t, .6); break;
+      case 'vf_f': v += this.vf(t, .16); break;
+    }
+    return v;
+  }
+}
+
+/* ================= 掃引描画 ================= */
+class Sweep {
+  constructor(cv, color, fn, map) {
+    Object.assign(this, { cv, color, fn, map });
+    this.ctx = cv.getContext('2d'); this.W = 0; this.H = 0; this.d = 1; this.lastT = null; this.px = null; this.py = 0;
+  }
+  resize() {
+    const r = this.cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    const W = Math.round(r.width * d), H = Math.round(r.height * d);
+    if (W === this.cv.width && H === this.cv.height && this.W) return;
+    this.cv.width = W; this.cv.height = H; this.W = W; this.H = H; this.d = d; this.px = null;
+  }
+  step(now) {
+    const { W, H, ctx } = this;
+    if (W < 4 || H < 4) { this.lastT = now; return; }
+    if (this.lastT === null || now - this.lastT > 0.5) { this.lastT = now - 1 / 60; this.px = null; }
+    const dt = 1 / SR; let t = this.lastT;
+    ctx.beginPath();
+    if (this.px !== null) ctx.moveTo(this.px, this.py);
+    while (t + dt <= now) {
+      t += dt;
+      const x = (t % SWEEP) / SWEEP * W;
+      const y = clamp(this.map(this.fn(t)) * H, 1, H - 1);
+      if (this.px === null || x < this.px - W / 2) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      this.px = x; this.py = y;
+    }
+    this.lastT = t;
+    if (this.px !== null) {
+      const a = this.px + 2 * this.d, b = a + W * .035;
+      if (a < W) ctx.clearRect(a, 0, Math.min(b, W) - a, H);
+      if (b > W) { const s = Math.max(0, a - W); ctx.clearRect(s, 0, b - W - s, H); }
+    }
+    ctx.strokeStyle = this.color; ctx.lineWidth = 2.2 * this.d; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+}
+
+/* ================= モニター画面 ================= */
+const MON_HTML = `
+<div class="mtop"><span class="bed" id="mBed">BED</span><div class="alarmbar" id="mAlarm"></div><span class="clock" id="mClock">--:--</span></div>
+<div class="mmain">
+  <div class="nums">
+    <div class="panel p-hr"><div class="lbl">HR<small>/min</small></div><div class="lims" id="limHr"></div><div class="val" id="vHr">---</div></div>
+    <div class="panel p-bp"><div class="lbl">NIBP<small>mmHg</small> <small id="bpTime"></small></div><div class="map" id="vMap"></div><div class="bpstat" id="bpStat"></div><div class="val" id="vBp">---/---</div></div>
+    <div class="panel p-spo2"><div class="lbl">SpO<sub style="font-size:.6em">2</sub><small>%</small></div><div class="lims" id="limSp"></div><div class="val" id="vSp">---</div></div>
+    <div class="resp no-et" id="respRow">
+      <div class="panel p-et"><div class="lbl">EtCO<sub style="font-size:.6em">2</sub><small>mmHg</small></div><div class="lims" id="limEt"></div><div class="val" id="vEt">---</div></div>
+      <div class="panel p-rr"><div class="lbl">RR<small>/min</small></div><div class="lims" id="limRr"></div><div class="val" id="vRr">---</div></div>
+    </div>
+  </div>
+  <div class="waves no-et" id="waves">
+    <div class="wave w-ecg"><canvas></canvas><div class="wlbl">II&nbsp;&nbsp;×1</div></div>
+    <div class="wave w-pl"><canvas></canvas><div class="wlbl">SpO2</div></div>
+    <div class="wave w-co2"><canvas></canvas><div class="wlbl">CO2</div><div class="co2top"><span id="co2Max">50</span></div><div class="co2bot">0</div></div>
+  </div>
+</div>
+<div class="mbot"><span>ECG II　25mm/s</span><span id="mConn"></span><span class="sp"></span><button id="mSil">アラーム消音</button><button id="mFull">全画面</button></div>
+<div class="startov" id="mStart"><div><b>クリック（タップ）してモニター開始</b><br><small>同期音・アラーム音を有効にします</small></div></div>`;
+
+class Monitor {
+  constructor(root) {
+    this.root = root; root.innerHTML = MON_HTML;
+    this.q = id => root.querySelector('#' + id);
+    this.gen = new Gen(); this.pl = new Track();
+    this.gen.hrAt = t => this.cur('hr', t);
+    this.tv = {}; this.state = fullState(); this.rev = null;
+    this.bp = { s: null, d: null, time: null, meas: null, err: false }; this.lastNibp = -1e9;
+    this.hrT = []; this.hrD = null; this.lastBeat = -99; this.lastPulse = -99; this.noise = 0;
+    this.breaths = []; this.nextBreath = 0; this.rrD = null; this.etD = null; this.lastBreath = -99; this.lastBT = 4;
+    this.silUntil = 0; this.lastSnd = -99; this.alarms = []; this.lastUi = 0; this.lastAl = 0; this.lastHb = 0; this.alIdx = 0;
+    this.started = false; this.co2Scale = 50;
+
+    const mk = (sel, color, fn, map) => new Sweep(root.querySelector(sel + ' canvas'), color, fn, map);
+    this.sw = [
+      mk('.w-ecg', '#3dff6e', t => this.gen.value(t), v => .58 - v * .30),
+      mk('.w-pl', '#3fe6ff', t => this.pl.val(t), v => .86 - v * .66),
+      mk('.w-co2', '#ffe24a', t => this.capVal(t), v => .88 - (v / this.co2Scale) * .75),
+    ];
+    const ro = new ResizeObserver(() => this.sw.forEach(s => s.resize()));
+    root.querySelectorAll('.wave').forEach(w => ro.observe(w));
+
+    const start = () => {
+      Snd.unlock(); this.started = true; this.q('mStart').classList.add('hidden');
+      if (MODE === 'monitor') { try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {} }
+    };
+    this.q('mStart').addEventListener('click', start);
+    this.q('mSil').addEventListener('click', () => this.silence());
+    this.q('mFull').addEventListener('click', () => {
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else (MODE === 'monitor' ? document.documentElement : root).requestFullscreen();
+      } catch (e) {}
+    });
+
+    Sync.on(msg => {
+      if (msg.type === 'state') this.applyState(msg.state, false, msg.rev);
+      else if (msg.type === 'cmd') {
+        if (msg.cmd === 'nibp') this.startNibp(nowS());
+        else if (msg.cmd === 'silence') this.silence(msg.mode || 'toggle');
+      }
+    });
+    Sync.statusCb = () => this.updConn();
+    this.updConn();
+    this.applyState(store.get('ems-bsm-state') || DEFAULT_STATE, true, null);
+    const loop = () => { try { this.tick(nowS()); } catch (e) { console.error(e); } requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  }
+  updConn() {
+    const el = this.q('mConn');
+    if (MODE === 'demo') el.textContent = '● デモ';
+    else el.textContent = Sync.server ? (Sync.connected ? '● 操作端末と接続中' : '○ サーバー再接続中…') : '● 同一PC内モード';
+  }
+  cur(k, t) {
+    const o = this.tv[k]; if (!o) return 0;
+    if (o.dur <= 0 || t >= o.t0 + o.dur) return o.to;
+    if (t <= o.t0) return o.from;
+    const f = (t - o.t0) / o.dur, e = f * f * (3 - 2 * f);
+    return o.from + (o.to - o.from) * e;
+  }
+  setT(k, to, dur, now) { const from = this.tv[k] ? this.cur(k, now) : to; this.tv[k] = { from, to, t0: now, dur }; }
+  applyState(st, initial, rev) {
+    if (!initial && rev != null && rev === this.rev) return;
+    this.rev = rev;
+    const now = nowS(), prev = this.state, s = fullState(st);
+    this.state = s;
+    store.set('ems-bsm-state', s);
+    const dur = initial ? 0 : Number(s.transition) || 0;
+    const rChanged = prev.rhythm !== s.rhythm;
+    this.setT('hr', Number(s.hr) || 0, rChanged ? 0 : dur, now);
+    this.setT('spo2', Number(s.spo2) || 0, dur, now);
+    this.setT('rr', Number(s.rr) || 0, dur, now);
+    this.setT('etco2', Number(s.etco2) || 0, dur, now);
+    this.gen.setRhythm(s.rhythm, now);
+    this.gen.ectopy = ECT_OK.has(s.rhythm) ? s.ectopy : 'none';
+    this.gen.st = s.stMode === 'up' ? s.stMm * .1 : s.stMode === 'down' ? -s.stMm * .1 : 0;
+    this.gen.jitter = !!s.jitter;
+    this.gen.wide = !!s.qrsWide && WIDE_OK.has(s.rhythm);
+    this.q('respRow').classList.toggle('no-et', !s.etco2On);
+    this.q('waves').classList.toggle('no-et', !s.etco2On);
+    requestAnimationFrame(() => this.sw.forEach(w => w.resize()));
+    this.q('mBed').textContent = 'BED  ' + (s.bed || '');
+    const L = s.lim;
+    this.q('limHr').innerHTML = L.hrH + '<br>' + L.hrL;
+    this.q('limSp').innerHTML = '<br>' + L.spo2L;
+    this.q('limRr').innerHTML = L.rrH + '<br>' + L.rrL;
+    this.q('limEt').innerHTML = L.etH + '<br>' + L.etL;
+    if (initial) { this.bp.s = s.sbp; this.bp.d = s.dbp; this.bp.time = new Date(); this.bp.err = false; }
+    else if (s.nibpOnApply && (s.sbp !== prev.sbp || s.dbp !== prev.dbp || (rChanged && PULSELESS.has(prev.rhythm) !== PULSELESS.has(s.rhythm)))) this.startNibp(now);
+  }
+  silence(mode = 'toggle') {
+    const now = nowS();
+    if (mode === 'off' || (mode === 'toggle' && now < this.silUntil)) this.silUntil = 0;
+    else this.silUntil = now + 120;
+    this.updSilBtn(now); this.lastHb = 0;
+  }
+  silLeft(now) { return Math.max(0, Math.ceil(this.silUntil - now)); }
+  updSilBtn(now) {
+    const r = this.silLeft(now), b = this.q('mSil');
+    b.textContent = r > 0 ? '消音中 ' + Math.floor(r / 60) + ':' + pad2(r % 60) + '（解除）' : 'アラーム消音';
+    b.style.background = r > 0 ? '#5a1f2c' : '';
+  }
+  pf(s) {
+    const p = this.state.pulse;
+    if (p === 'off') return 0;
+    if (p === 'auto' && PULSELESS.has(this.state.rhythm)) return 0;
+    return s;
+  }
+  startNibp(now) {
+    if (this.bp.meas) return;
+    this.bp.meas = { t0: now, tgt: clamp(Math.max(160, this.state.sbp + 40), 100, 280), cuff: 0 };
+    this.lastNibp = now;
+  }
+  updNibp(now) {
+    const m = this.bp.meas;
+    if (!m) {
+      const iv = Number(this.state.nibpInterval) || 0;
+      if (iv > 0 && now - this.lastNibp > iv * 60) this.startNibp(now);
+      return;
+    }
+    const el = now - m.t0;
+    if (el < 4) m.cuff = m.tgt * (el / 4);
+    else {
+      m.cuff = m.tgt - (el - 4) * 7;
+      if (m.cuff <= Math.max(Math.min(this.state.dbp, 200) - 15, 20)) {
+        this.bp.meas = null; this.bp.time = new Date();
+        if (this.pf(1) > 0 && this.state.sbp > 20) { this.bp.s = this.state.sbp; this.bp.d = this.state.dbp; this.bp.err = false; }
+        else { this.bp.s = null; this.bp.d = null; this.bp.err = true; }
+      }
+    }
+  }
+  onBeat(e) {
+    const s = this.pf(e.s);
+    if (e.t - this.lastBeat > 3) this.hrT = [];
+    this.hrT.push(e.t); if (this.hrT.length > 9) this.hrT.shift();
+    this.lastBeat = e.t;
+    if (this.hrT.length >= 2) { const n = this.hrT.length - 1; this.hrD = Math.round(60 * n / (this.hrT[n] - this.hrT[0])); }
+    if (s > 0.05) {
+      const w = clamp(e.rr / .8, .45, 1.1), A = s * clamp(this.state.sbp / 110, .35, 1.1), o = e.t + .2;
+      this.pl.g(o + .11 * w, .045 * w, .9 * A); this.pl.g(o + .2 * w, .07 * w, .45 * A); this.pl.g(o + .4 * w, .06 * w, .28 * A);
+      this.lastPulse = e.t;
+    }
+    if (this.started && this.state.syncVol > 0 && !(this.state.silenceSync && nowS() < this.silUntil)) {
+      const sp = this.spDisp();
+      const f = typeof sp === 'number' ? 300 + clamp(sp - 70, 0, 30) * 14 : 600;
+      Snd.tone(f, .07, this.state.syncVol / 100 * .3);
+    }
+  }
+  spDisp() {
+    if (nowS() - this.lastPulse > 6) return '---';
+    return clamp(Math.round(this.cur('spo2', nowS()) + this.noise), 0, 100);
+  }
+  capShape(tau, T, E) {
+    const ex = T * .55, rise = clamp(T * .12, .15, .4), dn = Math.min(.18, T * .08);
+    if (tau < rise) { const f = tau / rise; return E * .9 * f * f * (3 - 2 * f); }
+    if (tau < ex) return E * (.9 + .1 * (tau - rise) / (ex - rise));
+    if (tau < ex + dn) { const f = (tau - ex) / dn; return E * (1 - f * f * (3 - 2 * f)); }
+    return 0;
+  }
+  capVal(t) {
+    for (let i = this.breaths.length - 1; i >= 0; i--) {
+      const b = this.breaths[i];
+      if (t >= b.b) { const tau = t - b.b; return tau >= b.T ? 0 : this.capShape(tau, b.T, b.E); }
+    }
+    return 0;
+  }
+  breathe(now) {
+    if (this.nextBreath < now - 2) this.nextBreath = now;
+    while (this.nextBreath <= now + 0.05) {
+      const rr = this.cur('rr', now);
+      if (rr < 1) { this.nextBreath = now + 0.5; break; }
+      let T = 60 / rr; if (this.state.jitter) T *= 1 + (Math.random() - .5) * .08;
+      const E = Math.max(0, this.cur('etco2', now) + (this.state.jitter ? (Math.random() - .5) * 2 : 0));
+      this.breaths.push({ b: this.nextBreath, T, E });
+      this.nextBreath += T;
+    }
+    for (const b of this.breaths) {
+      if (!b.r1 && now >= b.b) { b.r1 = 1; this.rrD = Math.round(60 / b.T); this.lastBreath = b.b; this.lastBT = b.T; }
+      if (!b.r2 && now >= b.b + b.T * .55) { b.r2 = 1; this.etD = Math.round(b.E); }
+    }
+    if (now - this.lastBreath > Math.max(12, 2.5 * this.lastBT) && this.rrD !== null) { this.rrD = 0; this.etD = 0; }
+    this.breaths = this.breaths.filter(b => b.b + b.T > now - 1);
+  }
+  tick(now) {
+    this.gen.schedule(now);
+    const ev = this.gen.events;
+    while (ev.length && ev[0].t <= now) { const e = ev.shift(); if (now - e.t < 1) this.onBeat(e); }
+    this.pl.prune(now - .05);
+    this.breathe(now);
+    this.updNibp(now);
+    this.sw.forEach(s => s.step(now));
+    if (now - this.lastUi > .2) { this.lastUi = now; this.ui(now); }
+    if (now - this.lastAl > .5) { this.lastAl = now; this.evalAlarms(now); }
+    if (now - this.lastHb > 1) { this.lastHb = now; this.updSilBtn(now); Sync.send({ type: 'hb', sil: this.silLeft(now) }); }
+  }
+  ui(now) {
+    const s = this.state;
+    if (s.jitter) this.noise = clamp(this.noise + (Math.random() - .5) * .25, -.7, .7); else this.noise = 0;
+    if (this.lastBeat > 0 && now - this.lastBeat > Math.max(4, 1.6 * 60 / Math.max(this.hrD || 60, 1))) { this.hrD = 0; this.hrT = []; }
+    this.hrShown = NO_HR.has(s.rhythm) && s.rhythm !== 'asys' ? '---' : (this.hrD == null ? '---' : this.hrD);
+    this.q('vHr').textContent = this.hrShown;
+    this.spShown = this.spDisp();
+    this.q('vSp').textContent = this.spShown;
+    const m = this.bp.meas, vbp = this.q('vBp');
+    if (m) {
+      vbp.classList.add('dim');
+      this.q('bpStat').textContent = (m.cuff < m.tgt - 1 && now - m.t0 < 4 ? '加圧中 ' : '測定中 ') + Math.max(0, Math.round(m.cuff)) + ' mmHg';
+    } else {
+      vbp.classList.remove('dim');
+      this.q('bpStat').textContent = (this.bp.err ? '測定エラー' : '') + (Number(s.nibpInterval) > 0 ? '　自動 ' + s.nibpInterval + '分' : '');
+    }
+    if (this.bp.s != null) {
+      vbp.textContent = this.bp.s + '/' + this.bp.d;
+      this.q('vMap').textContent = '(' + Math.round(this.bp.d + (this.bp.s - this.bp.d) / 3) + ')';
+    } else { vbp.textContent = '---/---'; this.q('vMap').textContent = '( --- )'; }
+    this.q('bpTime').textContent = this.bp.time ? hhmm(this.bp.time) : '';
+    this.q('vRr').textContent = this.rrD == null ? '---' : this.rrD;
+    this.q('vEt').textContent = this.etD == null ? '---' : this.etD;
+    const et = this.cur('etco2', now); this.co2Scale = et > 45 ? 100 : 50; this.q('co2Max').textContent = this.co2Scale;
+    const d = new Date(); this.q('mClock').textContent = hhmm(d) + ':' + pad2(d.getSeconds());
+  }
+  evalAlarms(now) {
+    const s = this.state, L = s.lim, al = [];
+    const panels = { hr: '.p-hr', bp: '.p-bp', spo2: '.p-spo2', rr: '.p-rr', et: '.p-et' };
+    if (s.alarmOn) {
+      const crisis = { vf_c: 'VF 心室細動', vf_f: 'VF 心室細動', pvt: 'VT 心室頻拍', vt: 'VT 心室頻拍' }[s.rhythm];
+      const hr = this.hrShown, sp = this.spShown;
+      let hrCrit = false;
+      if (crisis) { al.push(['high', crisis, 'hr']); hrCrit = true; }
+      else if (hr === 0) { al.push(['high', 'ASYSTOLE 心静止', 'hr']); hrCrit = true; }
+      if (!hrCrit && typeof hr === 'number') {
+        if (hr > L.hrH) al.push(['mid', 'HR 上限 ' + hr, 'hr']);
+        else if (hr < L.hrL) al.push(['mid', 'HR 下限 ' + hr, 'hr']);
+      }
+      if (typeof sp === 'number') { if (sp < L.spo2L) al.push([sp < L.spo2L - 5 ? 'high' : 'mid', 'SpO2 下限 ' + sp, 'spo2']); }
+      else if (!hrCrit) al.push(['mid', 'SpO2 脈波検出不可', 'spo2']);
+      if (this.bp.err) al.push(['mid', 'NIBP 測定エラー', 'bp']);
+      else if (this.bp.s != null && !this.bp.meas) {
+        if (this.bp.s < L.sbpL) al.push(['mid', 'NIBP 下限 ' + this.bp.s, 'bp']);
+        else if (this.bp.s > L.sbpH) al.push(['mid', 'NIBP 上限 ' + this.bp.s, 'bp']);
+      }
+      if (this.rrD === 0) al.push([s.etco2On ? 'high' : 'mid', 'APNEA 無呼吸', 'rr']);
+      else if (this.rrD != null) {
+        if (this.rrD > L.rrH) al.push(['mid', 'RR 上限 ' + this.rrD, 'rr']);
+        else if (this.rrD < L.rrL) al.push(['mid', 'RR 下限 ' + this.rrD, 'rr']);
+      }
+      if (s.etco2On && this.etD != null && this.rrD) {
+        if (this.etD < L.etL) al.push(['mid', 'EtCO2 下限 ' + this.etD, 'et']);
+        else if (this.etD > L.etH) al.push(['mid', 'EtCO2 上限 ' + this.etD, 'et']);
+      }
+    }
+    al.sort((a, b) => (a[0] === 'high' ? 0 : 1) - (b[0] === 'high' ? 0 : 1));
+    for (const k in panels) {
+      const el = this.root.querySelector(panels[k]); const a = al.find(x => x[2] === k);
+      el.classList.toggle('al-high', !!a && a[0] === 'high');
+      el.classList.toggle('al-mid', !!a && a[0] === 'mid');
+    }
+    const bar = this.q('mAlarm');
+    const sil = now < this.silUntil;
+    if (!al.length) { bar.className = 'alarmbar'; bar.textContent = ''; return; }
+    const lvl = al[0][0];
+    const top = al.filter(x => x[0] === lvl);
+    this.alIdx = (this.alIdx + 1) % (top.length * 4);
+    const msg = top[Math.floor(this.alIdx / 4) % top.length][1];
+    bar.className = 'alarmbar ' + lvl + (sil ? ' sil' : '');
+    if (sil) { const r = Math.ceil(this.silUntil - now); bar.textContent = '🔕 消音 ' + Math.floor(r / 60) + ':' + pad2(r % 60) + '　' + msg; }
+    else bar.textContent = msg;
+    if (!sil && this.started && s.alarmVol > 0) {
+      const v = s.alarmVol / 100 * .35;
+      if (lvl === 'high' && now - this.lastSnd > 2.5) {
+        this.lastSnd = now;
+        [0, .16, .32, .62, .78].forEach(dl => Snd.tone(960, .11, v, dl, 'square'));
+      } else if (lvl === 'mid' && now - this.lastSnd > 7) {
+        this.lastSnd = now;
+        [0, .24, .48].forEach(dl => Snd.tone(660, .16, v * .8, dl, 'triangle'));
+      }
+    }
+  }
+}
+
+/* ================= 操作画面 ================= */
+const numF = (id, label, unit, step, extra = '') => `
+  <div class="f"><span class="l">${label}</span>
+    <div class="num"><button type="button" data-t="${id}" data-s="-${step}">−</button><input type="number" id="f-${id}" inputmode="decimal" step="${step}" ${extra}><button type="button" data-t="${id}" data-s="${step}">＋</button></div>
+    <span class="unit">${unit}</span></div>`;
+const CTRL_HTML = () => `
+<div class="chead"><h1>モニター操作</h1><span class="conn" id="cConn">…</span>${MODE !== 'monitor' ? '<a href="?mode=monitor" target="_blank" rel="noopener">モニター画面を開く ↗</a>' : ''}</div>
+<section><h3>プリセット（入力欄に読み込み → 反映で表示）</h3><div class="presets" id="presets"></div></section>
+<section><h3>心電図</h3>
+  <div class="f"><span class="l">リズム</span><select id="f-rhythm">${RHYTHM_GROUPS.map(([g, items]) => `<optgroup label="${g}">${items.map(([id, l]) => `<option value="${id}">${l}</option>`).join('')}</optgroup>`).join('')}</select></div>
+  <div class="hint" id="rHint"></div>
+  ${numF('hr', 'HR', '/min', 5, 'min="0" max="300"')}
+  <div class="f"><span class="l">QRS幅</span><select id="f-qrsWide"><option value="0">正常（narrow）</option><option value="1">ワイドQRS（心室内伝導障害）</option></select></div>
+  <div class="f"><span class="l">期外収縮</span><select id="f-ectopy">${ECTOPY.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></div>
+  <div class="f"><span class="l">ST変化</span><select id="f-stMode"><option value="none">なし</option><option value="up">ST上昇</option><option value="down">ST低下</option></select></div>
+  ${numF('stMm', 'ST量', 'mm', 0.5, 'min="0.5" max="6"')}
+</section>
+<section><h3>血圧（NIBP）</h3>
+  ${numF('sbp', '収縮期', 'mmHg', 5, 'min="0" max="300"')}
+  ${numF('dbp', '拡張期', 'mmHg', 5, 'min="0" max="250"')}
+  <label class="chk"><input type="checkbox" id="f-nibpOnApply">反映時、血圧が変わっていれば自動で測定演出</label>
+  <div class="f"><span class="l">自動測定</span><select id="f-nibpInterval"><option value="0">OFF（手動）</option><option value="2.5">2.5分ごと</option><option value="5">5分ごと</option><option value="10">10分ごと</option><option value="15">15分ごと</option></select></div>
+  <button class="btn" type="button" id="bNibp">▶ 今すぐNIBP測定（現在の反映値）</button>
+</section>
+<section><h3>SpO2</h3>
+  ${numF('spo2', 'SpO2', '%', 1, 'min="0" max="100"')}
+  <div class="f"><span class="l">脈波</span><select id="f-pulse"><option value="auto">自動（心停止リズムで消失）</option><option value="on">常にあり</option><option value="off">なし（脈波検出不可）</option></select></div>
+</section>
+<section><h3>呼吸・EtCO2</h3>
+  ${numF('rr', 'RR', '/min', 1, 'min="0" max="80"')}
+  <label class="chk"><input type="checkbox" id="f-etco2On">EtCO2 を使用（数値＋カプノ波形を表示）</label>
+  ${numF('etco2', 'EtCO2', 'mmHg', 1, 'min="0" max="150"')}
+</section>
+<section><h3>表示・音</h3>
+  <div class="f"><span class="l">変化時間</span><select id="f-transition"><option value="0">即時</option><option value="5">5秒かけて</option><option value="10">10秒かけて</option><option value="20">20秒かけて</option><option value="30">30秒かけて</option><option value="60">60秒かけて</option></select></div>
+  <label class="chk"><input type="checkbox" id="f-jitter">数値・波形の自然な揺らぎ</label>
+  <div class="f"><span class="l">同期音</span><input type="range" id="f-syncVol" min="0" max="100"></div>
+  <div class="f"><span class="l">アラーム音</span><input type="range" id="f-alarmVol" min="0" max="100"></div>
+  <label class="chk"><input type="checkbox" id="f-alarmOn">アラーム表示・鳴動を有効</label>
+  <label class="chk"><input type="checkbox" id="f-silenceSync">消音中は同期音（ピッ音）も止める</label>
+  <details><summary>アラーム設定値・表示名</summary>
+    <div class="limgrid">
+      <span></span><b>下限</b><b>上限</b>
+      <span>HR</span><input type="number" id="l-hrL"><input type="number" id="l-hrH">
+      <span>収縮期血圧</span><input type="number" id="l-sbpL"><input type="number" id="l-sbpH">
+      <span>SpO2</span><input type="number" id="l-spo2L"><span></span>
+      <span>RR</span><input type="number" id="l-rrL"><input type="number" id="l-rrH">
+      <span>EtCO2</span><input type="number" id="l-etL"><input type="number" id="l-etH">
+    </div>
+    <div class="f"><span class="l">BED表示</span><input type="text" id="f-bed" style="flex:1;background:#0b0f15;color:#fff;border:1px solid #2d3949;border-radius:8px;font-size:16px;padding:9px 10px"></div>
+  </details>
+</section>
+<div class="cbar"><div class="st" id="cSt">未反映</div><button class="sil" type="button" id="bSil">消音</button><button class="apply" type="button" id="bApply">反映</button></div>`;
+
+class Control {
+  constructor(root) {
+    this.root = root; root.innerHTML = CTRL_HTML();
+    this.g = id => root.querySelector('#f-' + id);
+    this.lastHb = -99;
+    const pr = root.querySelector('#presets');
+    PRESETS.forEach(([name, p]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
+      b.onclick = () => { this.fill(Object.assign(this.read(), p)); this.setDirty(true); };
+      pr.appendChild(b);
+    });
+    root.addEventListener('click', e => {
+      const b = e.target.closest('button[data-t]'); if (!b) return;
+      const inp = this.g(b.dataset.t); const st = parseFloat(b.dataset.s);
+      let v = (parseFloat(inp.value) || 0) + st;
+      if (inp.min !== '') v = Math.max(v, parseFloat(inp.min));
+      if (inp.max !== '') v = Math.min(v, parseFloat(inp.max));
+      inp.value = Math.round(v * 10) / 10; this.setDirty(true);
+    });
+    root.addEventListener('input', e => { if (e.target.matches('input,select')) this.setDirty(true); });
+    this.g('rhythm').addEventListener('change', () => {
+      const r = this.g('rhythm').value, inf = RINFO[r];
+      if (inf && !NO_HR.has(r)) this.g('hr').value = inf.hr;
+      this.sync();
+    });
+    ['etco2On', 'stMode'].forEach(k => this.g(k).addEventListener('change', () => this.sync()));
+    root.querySelector('#bApply').onclick = () => this.apply();
+    root.querySelector('#bSil').onclick = () => Sync.send({ type: 'cmd', cmd: 'silence', mode: this.silLeft > 0 ? 'off' : 'on' });
+    this.silLeft = 0;
+    root.querySelector('#bNibp').onclick = () => Sync.send({ type: 'cmd', cmd: 'nibp' });
+    Sync.on(msg => {
+      if (msg.type !== 'hb') return;
+      this.lastHb = nowS(); this.silLeft = msg.sil || 0;
+      const b = this.root.querySelector('#bSil'), r = this.silLeft;
+      b.textContent = r > 0 ? '消音中 ' + Math.floor(r / 60) + ':' + pad2(r % 60) : '消音';
+      b.classList.toggle('on', r > 0);
+    });
+    this.fill(fullState(store.get('ems-bsm-form') || store.get('ems-bsm-state') || DEFAULT_STATE));
+    this.setDirty(false);
+    this.root.querySelector('#cSt').textContent = '入力して「反映」でモニターに表示';
+    setInterval(() => this.updConn(), 1000); this.updConn();
+  }
+  updConn() {
+    const el = this.root.querySelector('#cConn');
+    if (MODE === 'demo') { el.textContent = 'デモ（同一画面）'; el.className = 'conn ok'; return; }
+    const mon = nowS() - this.lastHb < 8;
+    el.textContent = (Sync.server ? 'サーバー経由' : '同一ブラウザ') + '／モニター' + (mon ? '接続中' : '未検出');
+    el.className = 'conn' + (mon ? ' ok' : '');
+  }
+  sync() {
+    const r = this.g('rhythm').value;
+    this.root.querySelector('#rHint').textContent = (RINFO[r] && RINFO[r].hint) || '';
+    this.g('hr').disabled = NO_HR.has(r);
+    this.g('ectopy').disabled = !ECT_OK.has(r);
+    this.g('stMm').disabled = this.g('stMode').value === 'none';
+    this.g('qrsWide').disabled = !WIDE_OK.has(r);
+    this.g('etco2').disabled = !this.g('etco2On').checked;
+  }
+  read() {
+    const num = (id, def) => { const v = parseFloat(this.g(id).value); return isNaN(v) ? def : v; };
+    const lim = {}; for (const k in DEFAULT_STATE.lim) { const v = parseFloat(this.root.querySelector('#l-' + k).value); lim[k] = isNaN(v) ? DEFAULT_STATE.lim[k] : v; }
+    return {
+      rhythm: this.g('rhythm').value, hr: num('hr', 75), ectopy: this.g('ectopy').value,
+      qrsWide: this.g('qrsWide').value === '1', stMode: this.g('stMode').value, stMm: num('stMm', 2),
+      sbp: num('sbp', 120), dbp: num('dbp', 80), nibpOnApply: this.g('nibpOnApply').checked, nibpInterval: parseFloat(this.g('nibpInterval').value) || 0,
+      spo2: num('spo2', 98), pulse: this.g('pulse').value,
+      rr: num('rr', 16), etco2On: this.g('etco2On').checked, etco2: num('etco2', 38),
+      transition: parseFloat(this.g('transition').value) || 0, jitter: this.g('jitter').checked,
+      syncVol: num('syncVol', 50), alarmVol: num('alarmVol', 60), alarmOn: this.g('alarmOn').checked, silenceSync: this.g('silenceSync').checked,
+      bed: this.g('bed').value, lim
+    };
+  }
+  fill(s) {
+    for (const k of ['rhythm', 'hr', 'ectopy', 'stMode', 'stMm', 'sbp', 'dbp', 'nibpInterval', 'spo2', 'pulse', 'rr', 'etco2', 'transition', 'syncVol', 'alarmVol', 'bed']) this.g(k).value = s[k];
+    for (const k of ['nibpOnApply', 'etco2On', 'jitter', 'alarmOn', 'silenceSync']) this.g(k).checked = !!s[k];
+    this.g('qrsWide').value = s.qrsWide ? '1' : '0';
+    for (const k in s.lim) this.root.querySelector('#l-' + k).value = s.lim[k];
+    this.sync();
+  }
+  setDirty(d) {
+    this.dirty = d;
+    this.root.querySelector('#bApply').classList.toggle('dirty', d);
+    if (d) this.root.querySelector('#cSt').textContent = '● 未反映の変更あり';
+  }
+  apply() {
+    const s = this.read();
+    s.hr = clamp(Math.round(s.hr), 0, 300); s.sbp = clamp(Math.round(s.sbp), 0, 300); s.dbp = clamp(Math.round(s.dbp), 0, s.sbp);
+    s.spo2 = clamp(Math.round(s.spo2), 0, 100); s.rr = clamp(Math.round(s.rr), 0, 80); s.etco2 = clamp(Math.round(s.etco2), 0, 150);
+    s.stMm = clamp(s.stMm, 0.5, 6);
+    this.fill(s);
+    store.set('ems-bsm-form', s);
+    store.set('ems-bsm-state', s);
+    Sync.send({ type: 'state', state: s, rev: Date.now() });
+    this.setDirty(false);
+    const d = new Date();
+    this.root.querySelector('#cSt').textContent = '✓ 反映しました ' + hhmm(d) + ':' + pad2(d.getSeconds()) + '　' + RINFO[s.rhythm].label;
+  }
+}
+
+/* ================= 起動 ================= */
+Sync.init();
+document.body.classList.add('m-' + MODE);
+if (MODE === 'monitor') {
+  document.title = 'モニター画面 - BSM';
+  const r = document.createElement('div'); r.className = 'monitor'; document.body.appendChild(r); new Monitor(r);
+} else if (MODE === 'control') {
+  document.title = '操作画面 - BSM';
+  const r = document.createElement('div'); r.className = 'ctrl'; document.body.appendChild(r); new Control(r);
+} else {
+  const h = document.createElement('div'); h.className = 'dhead';
+  h.innerHTML = '<h1>救急車ベッドサイドモニター シミュレーター</h1><a href="?mode=monitor" target="_blank" rel="noopener">モニター画面のみ ↗</a><a href="?mode=control" target="_blank" rel="noopener">操作画面のみ ↗</a><p>デモ表示：下の操作パネルで数値を入れて「反映」を押すと上のモニターに表示されます。モニターをタップすると音が鳴ります。</p>';
+  document.body.appendChild(h);
+  const w = document.createElement('div'); w.className = 'demo-wrap';
+  const mw = document.createElement('div'); mw.className = 'monwrap';
+  const m = document.createElement('div'); m.className = 'monitor'; mw.appendChild(m);
+  const c = document.createElement('div'); c.className = 'ctrl';
+  w.appendChild(mw); w.appendChild(c); document.body.appendChild(w);
+  new Monitor(m); new Control(c);
+}
+})();
+</script>
+</body>
+</html>
