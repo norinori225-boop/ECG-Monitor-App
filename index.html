@@ -71,6 +71,7 @@ body.m-monitor .monitor{position:fixed;inset:0}
 .chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .chead h1{font-size:18px;margin:0;flex:1 0 auto;white-space:nowrap}
 .chead a{color:#7fb6ff;font-size:13px}
+.homebtn{background:#1d2735;color:#dbe6f2;border:1px solid #2f3d50;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
 .conn{font-size:12px;padding:4px 10px;border-radius:99px;background:#1d2633;color:#b9c6d4}
 .conn.ok{background:#0f3d24;color:#7dffb0}
 .ctrl section{background:#141a23;border:1px solid #232c39;border-radius:12px;padding:12px;margin:10px 0}
@@ -624,7 +625,7 @@ const MON_HTML = `
     <div class="wave w-co2"><canvas></canvas><div class="wlbl">CO2</div><div class="co2top"><span id="co2Max">50</span></div><div class="co2bot">0</div></div>
   </div>
 </div>
-<div class="mbot"><span>ECG II　25mm/s</span><span id="mConn"></span><span id="mRoom" class="room hidden"></span><span class="sp"></span><button id="mSil">アラーム消音</button><button id="mFull">全画面</button></div>
+<div class="mbot"><span>ECG II　25mm/s</span><span id="mConn"></span><span id="mRoom" class="room hidden"></span><span class="sp"></span><button id="mSil">アラーム消音</button><button id="mFull">全画面</button><button id="mHome">ホーム</button></div>
 <div class="startov" id="mStart"><div><b>クリック（タップ）してモニター開始</b><br><small>同期音・アラーム音を有効にします</small><div id="mStartRoom" class="hidden"></div></div></div>`;
 
 class Monitor {
@@ -656,6 +657,8 @@ class Monitor {
     };
     this.q('mStart').addEventListener('click', start);
     this.q('mSil').addEventListener('click', () => this.silence());
+    this.q('mHome').addEventListener('click', goHome);
+    if (MODE === 'demo') this.q('mHome').classList.add('hidden');
     this.q('mFull').addEventListener('click', () => {
       try {
         if (document.fullscreenElement) document.exitFullscreen();
@@ -672,7 +675,7 @@ class Monitor {
       }
     });
     if (this.preview) {
-      this.q('mStart').classList.add('hidden'); this.q('mSil').classList.add('hidden'); this.q('mFull').classList.add('hidden');
+      this.q('mStart').classList.add('hidden'); this.q('mSil').classList.add('hidden'); this.q('mFull').classList.add('hidden'); this.q('mHome').classList.add('hidden');
     } else Sync.statusCb = () => this.updConn();
     if (Sync.cloudOn && MODE !== 'demo' && !this.preview) {
       let room = (qs.get('room') || '').replace(/\D/g, '') || store.get('ems-bsm-room');
@@ -717,6 +720,11 @@ class Monitor {
     this.setT('hr', Number(s.hr) || 0, rChanged ? 0 : dur, now);
     this.setT('spo2', Number(s.spo2) || 0, dur, now);
     this.setT('rr', Number(s.rr) || 0, dur, now);
+    // 呼吸回数が変わったら、次の呼吸を新しい周期に合わせて前倒し（波形の追従を速くする）
+    if ((Number(s.rr) || 0) >= 1 && Number(s.rr) !== Number(prev.rr) && !initial) {
+      const cand = Math.max(now + 0.2, this.lastBreath + 60 / Number(s.rr));
+      if (cand < this.nextBreath) this.nextBreath = cand;
+    }
     this.setT('etco2', Number(s.etco2) || 0, dur, now);
     this.gen.setRhythm(s.rhythm, now);
     this.gen.ectopy = ECT_OK.has(s.rhythm) ? s.ectopy : 'none';
@@ -821,11 +829,7 @@ class Monitor {
       this.breaths.push({ b: this.nextBreath, T, E });
       this.nextBreath += T;
     }
-    for (const b of this.breaths) {
-      if (!b.r1 && now >= b.b) { b.r1 = 1; this.rrD = Math.round(60 / b.T); this.lastBreath = b.b; this.lastBT = b.T; }
-      if (!b.r2 && now >= b.b + b.T * .55) { b.r2 = 1; this.etD = Math.round(b.E); }
-    }
-    if (now - this.lastBreath > Math.max(12, 2.5 * this.lastBT) && this.rrD !== null) { this.rrD = 0; this.etD = 0; }
+    for (const b of this.breaths) if (now >= b.b && b.b > this.lastBreath) { this.lastBreath = b.b; this.lastBT = b.T; }
     this.breaths = this.breaths.filter(b => b.b + b.T > now - 1);
   }
   tick(now) {
@@ -861,6 +865,12 @@ class Monitor {
       this.q('vMap').textContent = '(' + Math.round(this.bp.d + (this.bp.s - this.bp.d) / 3) + ')';
     } else { vbp.textContent = '---/---'; this.q('vMap').textContent = '( --- )'; }
     this.q('bpTime').textContent = this.bp.time ? hhmm(this.bp.time) : '';
+    // RR・EtCO2 は呼吸の区切りを待たず、反映値（変化時間で補間）をそのまま表示
+    const rrNow = this.cur('rr', now);
+    if (s.jitter) { this.rrNoise = clamp((this.rrNoise || 0) + (Math.random() - .5) * .15, -.6, .6); this.etNoise = clamp((this.etNoise || 0) + (Math.random() - .5) * .3, -1.2, 1.2); }
+    else { this.rrNoise = 0; this.etNoise = 0; }
+    if (rrNow < 1) { this.rrD = 0; this.etD = 0; }
+    else { this.rrD = Math.max(1, Math.round(rrNow + this.rrNoise)); this.etD = Math.max(0, Math.round(this.cur('etco2', now) + this.etNoise)); }
     this.q('vRr').textContent = this.rrD == null ? '---' : this.rrD;
     this.q('vEt').textContent = this.etD == null ? '---' : this.etD;
     const et = this.cur('etco2', now); this.co2Scale = et > 45 ? 100 : 50; this.q('co2Max').textContent = this.co2Scale;
@@ -931,7 +941,7 @@ const numF = (id, label, unit, step, extra = '') => `
     <div class="num"><button type="button" data-t="${id}" data-s="-${step}">−</button><input type="number" id="f-${id}" inputmode="decimal" step="${step}" ${extra}><button type="button" data-t="${id}" data-s="${step}">＋</button></div>
     <span class="unit">${unit}</span></div>`;
 const CTRL_HTML = () => `
-<div class="chead"><h1>モニター操作</h1><span class="conn" id="cConn">…</span>${MODE !== 'monitor' ? '<a href="?mode=monitor" target="_blank" rel="noopener">モニター画面を開く ↗</a>' : ''}</div>
+<div class="chead">${MODE === 'control' ? '<button type="button" class="homebtn" id="cHome">← ホーム</button>' : ''}<h1>モニター操作</h1><span class="conn" id="cConn">…</span>${MODE !== 'monitor' ? '<a href="?mode=monitor" target="_blank" rel="noopener">モニター画面を開く ↗</a>' : ''}</div>
 ${Sync.cloudOn && MODE !== 'demo' ? `<section><h3>クラウド同期（インターネット経由）</h3>
   <div class="f"><span class="l">ルーム番号</span><input type="number" id="c-room" inputmode="numeric" placeholder="モニターに表示の番号" style="flex:1;font-size:20px!important;font-weight:700;text-align:center"><button class="btn" type="button" id="c-join">接続</button></div>
   <div class="hint" id="c-roomSt" style="margin-left:0">モニター画面に表示されている4桁の番号を入力して「接続」</div>
@@ -1016,6 +1026,7 @@ class Control {
     });
     ['etco2On', 'stMode'].forEach(k => this.g(k).addEventListener('change', () => this.sync()));
     root.querySelector('#bApply').onclick = () => this.apply();
+    const hb = root.querySelector('#cHome'); if (hb) hb.onclick = goHome;
     root.querySelector('#bSil').onclick = () => Sync.send({ type: 'cmd', cmd: 'silence', mode: this.silLeft > 0 ? 'off' : 'on' });
     this.silLeft = 0;
     root.querySelector('#bNibp').onclick = () => Sync.send({ type: 'cmd', cmd: 'nibp' });
@@ -1109,6 +1120,10 @@ class Control {
 }
 
 /* ================= 起動 ================= */
+function goHome() {
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  location.href = location.pathname;
+}
 Sync.init();
 document.body.classList.add('m-' + MODE);
 if (MODE === 'monitor') {
@@ -1143,8 +1158,9 @@ if (MODE === 'monitor') {
 }
 function startDemo() {
   const h = document.createElement('div'); h.className = 'dhead';
-  h.innerHTML = '<h1>救急車ベッドサイドモニター シミュレーター</h1><a href="?mode=monitor">モニター画面へ</a><a href="?mode=control">操作画面へ</a><a href="./">ホームへ</a><p>デモ表示：下の操作パネルで数値を入れて「反映」を押すと上のモニターに表示されます。モニターをタップすると音が鳴ります。</p>';
+  h.innerHTML = '<h1>救急車ベッドサイドモニター シミュレーター</h1><a href="?mode=monitor">モニター画面へ</a><a href="?mode=control">操作画面へ</a><a href="#" id="dHome">← ホームへ</a><p>デモ表示：下の操作パネルで数値を入れて「反映」を押すと上のモニターに表示されます。モニターをタップすると音が鳴ります。</p>';
   document.body.appendChild(h);
+  h.querySelector('#dHome').onclick = e => { e.preventDefault(); goHome(); };
   const w = document.createElement('div'); w.className = 'demo-wrap';
   const mw = document.createElement('div'); mw.className = 'monwrap';
   const m = document.createElement('div'); m.className = 'monitor'; mw.appendChild(m);
