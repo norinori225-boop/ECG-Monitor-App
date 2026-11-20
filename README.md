@@ -60,7 +60,7 @@
 | `index.html` | ホーム（モニター画面・操作画面・デモを選ぶボタン） |
 | `index.html?mode=demo` | デモ（モニター＋操作パネルを 1 画面に表示） |
 | `index.html?mode=monitor` | モニター表示専用 |
-| `index.html?mode=control` | 操作パネル専用 |
+| `index.html?mode=control` | 操作パネル専用（上部にモニターのプレビューを固定表示） |
 
 ### 1 台の PC で、TV・大型モニターに表示する
 

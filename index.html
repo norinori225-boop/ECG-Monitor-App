@@ -12,7 +12,7 @@ body.m-monitor{background:#000;overflow:hidden;height:100%}
 .hidden{display:none!important}
 
 /* ===== Monitor ===== */
-.monitor{container-type:size;position:relative;background:#000;color:#fff;display:grid;grid-template-rows:6.5cqh 1fr 5cqh;overflow:hidden;user-select:none;-webkit-user-select:none;font-family:"Arial Narrow","Roboto Condensed","Helvetica Neue",Arial,sans-serif}
+.monitor{container-type:size;position:relative;background:#000;color:#fff;display:grid;grid-template-rows:6.5% 1fr 5%;overflow:hidden;user-select:none;-webkit-user-select:none;font-family:"Arial Narrow","Roboto Condensed","Helvetica Neue",Arial,sans-serif}
 body.m-monitor .monitor{position:fixed;inset:0}
 .mtop{display:flex;align-items:center;gap:2cqw;padding:0 1.5cqw;font-size:3cqh;background:#0d1a2e;color:#cfe0ff;border-bottom:1px solid #22324a;min-width:0}
 .mtop .bed{font-weight:700;white-space:nowrap}
@@ -122,6 +122,11 @@ body.m-monitor .monitor{position:fixed;inset:0}
 .demo-wrap{display:grid;gap:12px;padding:12px;max-width:1500px;margin:0 auto}
 .monwrap{position:sticky;top:0;z-index:20;background:#0b0e13;padding-bottom:6px}
 .monwrap .monitor{width:100%;aspect-ratio:16/9;border-radius:8px;border:5px solid #d9dde3}
+.ctl-wrap{max-width:560px;margin:0 auto;padding:0 12px}
+.ctl-wrap .monwrap{padding-top:calc(8px + env(safe-area-inset-top));margin:0 -12px;padding-left:12px;padding-right:12px;box-shadow:0 6px 10px -6px rgba(0,0,0,.8)}
+.ctl-wrap .monwrap .monitor{border-width:3px}
+.ctl-wrap .ctrl{padding:4px 0 0}
+.pvtoggle{display:block;margin:4px auto 0;background:none;border:none;color:#7fb6ff;font-size:12px;cursor:pointer;padding:2px 8px}
 .demo-wrap .ctrl{padding:0;max-width:none}
 @media(min-width:1000px){.demo-wrap{grid-template-columns:1fr 420px;align-items:start}.monwrap{top:12px}}
 </style>
@@ -298,7 +303,7 @@ const Sync = {
       fetch('api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) }).catch(() => {});
     }
     this._cloudSend(msg);
-    if (MODE === 'demo') this._dispatch(msg);
+    if (MODE === 'demo' || MODE === 'control') this._dispatch(msg);
   },
   _recv(msg) {
     if (!msg || !msg.id || this.seen.has(msg.id)) return;
@@ -621,7 +626,8 @@ const MON_HTML = `
 <div class="startov" id="mStart"><div><b>クリック（タップ）してモニター開始</b><br><small>同期音・アラーム音を有効にします</small><div id="mStartRoom" class="hidden"></div></div></div>`;
 
 class Monitor {
-  constructor(root) {
+  constructor(root, opts = {}) {
+    this.preview = !!opts.preview;
     this.root = root; root.innerHTML = MON_HTML;
     this.q = id => root.querySelector('#' + id);
     this.gen = new Gen(); this.pl = new Track();
@@ -663,8 +669,10 @@ class Monitor {
       } else if (msg.type === 'ping') { this.hbForce = true; this.lastHb = 0;
       }
     });
-    Sync.statusCb = () => this.updConn();
-    if (Sync.cloudOn && MODE !== 'demo') {
+    if (this.preview) {
+      this.q('mStart').classList.add('hidden'); this.q('mSil').classList.add('hidden'); this.q('mFull').classList.add('hidden');
+    } else Sync.statusCb = () => this.updConn();
+    if (Sync.cloudOn && MODE !== 'demo' && !this.preview) {
       let room = (qs.get('room') || '').replace(/\D/g, '') || store.get('ems-bsm-room');
       if (!room) room = String(1000 + Math.floor(Math.random() * 9000));
       store.set('ems-bsm-room', room);
@@ -678,6 +686,7 @@ class Monitor {
   }
   updConn() {
     const el = this.q('mConn');
+    if (this.preview) { el.textContent = 'プレビュー（反映内容の確認用）'; return; }
     if (MODE === 'demo') { el.textContent = '● デモ'; return; }
     if (Sync.cloudOn) {
       el.textContent = { ok: '● クラウド接続中', connecting: '○ クラウド接続中…', offline: '× ネット未接続（再接続待ち）', error: '× クラウド接続エラー', off: '○ クラウド未接続' }[Sync.cloudSt] || '';
@@ -827,7 +836,7 @@ class Monitor {
     this.sw.forEach(s => s.step(now));
     if (now - this.lastUi > .2) { this.lastUi = now; this.ui(now); }
     if (now - this.lastAl > .5) { this.lastAl = now; this.evalAlarms(now); }
-    if (now - this.lastHb > 1) { this.lastHb = now; this.updSilBtn(now); Sync.send({ type: 'hb', sil: this.silLeft(now), force: !!this.hbForce }); this.hbForce = false; }
+    if (!this.preview && now - this.lastHb > 1) { this.lastHb = now; this.updSilBtn(now); Sync.send({ type: 'hb', sil: this.silLeft(now), force: !!this.hbForce }); this.hbForce = false; }
   }
   ui(now) {
     const s = this.state;
@@ -1097,7 +1106,17 @@ if (MODE === 'monitor') {
   const r = document.createElement('div'); r.className = 'monitor'; document.body.appendChild(r); new Monitor(r);
 } else if (MODE === 'control') {
   document.title = '操作画面 - BSM';
-  const r = document.createElement('div'); r.className = 'ctrl'; document.body.appendChild(r); new Control(r);
+  const w = document.createElement('div'); w.className = 'ctl-wrap';
+  const mw = document.createElement('div'); mw.className = 'monwrap';
+  const m = document.createElement('div'); m.className = 'monitor'; mw.appendChild(m);
+  const tg = document.createElement('button'); tg.type = 'button'; tg.className = 'pvtoggle';
+  mw.appendChild(tg);
+  const r = document.createElement('div'); r.className = 'ctrl';
+  w.appendChild(mw); w.appendChild(r); document.body.appendChild(w);
+  new Monitor(m, { preview: true }); new Control(r);
+  const setPv = show => { m.classList.toggle('hidden', !show); tg.textContent = show ? '▲ プレビューを隠す' : '▼ モニターのプレビューを表示'; store.set('ems-bsm-pv', show); };
+  let pv = store.get('ems-bsm-pv'); if (pv === null) pv = true; setPv(pv);
+  tg.onclick = () => { pv = !pv; setPv(pv); };
 } else if (MODE === 'demo') {
   startDemo();
 } else {
