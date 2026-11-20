@@ -103,6 +103,17 @@ body.m-monitor .monitor{position:fixed;inset:0}
 .limgrid input{width:100%;font-size:15px!important;padding:6px!important}
 .ctrl input[type=range]{flex:1}
 
+/* ===== Home ===== */
+.home{max-width:460px;margin:0 auto;padding:28px 16px calc(28px + env(safe-area-inset-bottom));text-align:center}
+.home h1{font-size:22px;line-height:1.4;margin:8px 0 6px}
+.home h1 small{font-size:15px;color:#9fb3c8;font-weight:500}
+.home .lead{color:#9fb3c8;font-size:14px;margin:0 0 18px}
+.hbtn{display:block;width:100%;text-align:left;text-decoration:none;color:#fff;border-radius:14px;padding:18px 20px;margin:12px 0;border:1px solid #2f3d50;background:#141a23;font:inherit;cursor:pointer}
+.hbtn b{display:block;font-size:20px;margin-bottom:4px}
+.hbtn span{font-size:13px;color:#b9c6d4}
+.hbtn.mon{background:linear-gradient(135deg,#0d3b22,#0f2a1f);border-color:#2a7a4b}
+.hbtn.ctl{background:linear-gradient(135deg,#123a6b,#11243f);border-color:#2f63a8}
+.home .note{font-size:12px;color:#8fa6bd;margin:14px 0 0}
 /* ===== Demo ===== */
 .dhead{max-width:1500px;margin:0 auto;padding:12px 12px 0;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}
 .dhead h1{font-size:18px;margin:0}
@@ -131,7 +142,7 @@ const CLOUD = {
 
 /* ================= 基本設定 ================= */
 const qs = new URLSearchParams(location.search);
-const MODE = (qs.get('mode') || 'demo').toLowerCase();
+let MODE = (qs.get('mode') || 'home').toLowerCase();
 const $ = (s, r = document) => r.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const TAU = Math.PI * 2;
@@ -1087,9 +1098,23 @@ if (MODE === 'monitor') {
 } else if (MODE === 'control') {
   document.title = '操作画面 - BSM';
   const r = document.createElement('div'); r.className = 'ctrl'; document.body.appendChild(r); new Control(r);
+} else if (MODE === 'demo') {
+  startDemo();
 } else {
+  const h = document.createElement('div'); h.className = 'home';
+  h.innerHTML = `<h1>救急車ベッドサイドモニター<br><small>シミュレーター</small></h1>
+    <p class="lead">この端末で使う画面を選んでください</p>
+    <a class="hbtn mon" href="?mode=monitor"><b>モニター画面</b><span>タブレット・PC・TVに表示する側</span></a>
+    <a class="hbtn ctl" href="?mode=control"><b>操作画面</b><span>スマホ・PCで数値を入力する側</span></a>
+    <button class="hbtn demo" type="button" id="hDemo"><b>デモ（1画面）</b><span>モニターと操作パネルを1画面で試す</span></button>
+    <p class="note">${Sync.cloudOn ? '● クラウド同期：設定済み（別々の端末で使えます）' : '○ クラウド同期：未設定（同じ端末・同じブラウザ内で同期）'}</p>
+    <p class="note">訓練・教育用シミュレーターです。医療機器ではありません。</p>`;
+  document.body.appendChild(h);
+  h.querySelector('#hDemo').onclick = () => { h.remove(); document.body.classList.remove('m-home'); MODE = 'demo'; document.body.classList.add('m-demo'); startDemo(); };
+}
+function startDemo() {
   const h = document.createElement('div'); h.className = 'dhead';
-  h.innerHTML = '<h1>救急車ベッドサイドモニター シミュレーター</h1><a href="?mode=monitor" target="_blank" rel="noopener">モニター画面のみ ↗</a><a href="?mode=control" target="_blank" rel="noopener">操作画面のみ ↗</a><p>デモ表示：下の操作パネルで数値を入れて「反映」を押すと上のモニターに表示されます。モニターをタップすると音が鳴ります。</p>';
+  h.innerHTML = '<h1>救急車ベッドサイドモニター シミュレーター</h1><a href="?mode=monitor">モニター画面へ</a><a href="?mode=control">操作画面へ</a><a href="./">ホームへ</a><p>デモ表示：下の操作パネルで数値を入れて「反映」を押すと上のモニターに表示されます。モニターをタップすると音が鳴ります。</p>';
   document.body.appendChild(h);
   const w = document.createElement('div'); w.className = 'demo-wrap';
   const mw = document.createElement('div'); mw.className = 'monwrap';
