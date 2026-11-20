@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>救急車ベッドサイドモニター シミュレーター</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d1a2e">
+<link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="訓練用モニター">
 <style>
 :root{--ecg:#3dff6e;--bp:#ff6b5e;--spo2:#3fe6ff;--co2:#ffe24a;--rr:#fff3a6}
 *{box-sizing:border-box}
@@ -148,7 +156,7 @@ const CLOUD = {
 };
 
 /* ================= 基本設定 ================= */
-const APP_VERSION = '1.2.0 (2026-11-20)';
+const APP_VERSION = '1.3.0 (2026-11-20)';
 const qs = new URLSearchParams(location.search);
 let MODE = (qs.get('mode') || 'home').toLowerCase();
 const $ = (s, r = document) => r.querySelector(s);
@@ -1117,6 +1125,11 @@ class Control {
     const d = new Date();
     this.root.querySelector('#cSt').textContent = '✓ 反映しました ' + hhmm(d) + ':' + pad2(d.getSeconds()) + '　' + RINFO[s.rhythm].label;
   }
+}
+
+/* ================= PWA（オフライン起動・ホーム画面に追加） ================= */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 }
 
 /* ================= 起動 ================= */

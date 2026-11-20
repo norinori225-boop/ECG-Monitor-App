@@ -1,0 +1,22 @@
+{
+  "name": "救急車ベッドサイドモニター シミュレーター",
+  "short_name": "訓練用モニター",
+  "description": "救急隊・医療者の想定訓練用ベッドサイドモニター シミュレーター（医療機器ではありません）",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0e13",
+  "theme_color": "#0d1a2e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "モニター画面", "url": "./?mode=monitor", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "操作画面", "url": "./?mode=control", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
