@@ -91,6 +91,7 @@ body.m-monitor .monitor{position:fixed;inset:0}
 .chk input{width:20px;height:20px;flex:none}
 .presets{display:flex;flex-wrap:wrap;gap:6px}
 .presets button{background:#1d2735;color:#dbe6f2;border:1px solid #2f3d50;border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
+.presets button.active{background:#ff8a00;border-color:#ffb052;color:#111;font-weight:700;box-shadow:0 0 0 2px rgba(255,138,0,.35)}
 .btn{background:#24344a;color:#fff;border:1px solid #35496a;border-radius:8px;padding:9px 14px;font-size:14px;cursor:pointer}
 .cbar{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;padding:10px 0 calc(10px + env(safe-area-inset-bottom));background:linear-gradient(to top,#0b0e13 75%,rgba(11,14,19,0));z-index:10}
 .cbar .st{flex:1;font-size:12px;color:#9fb0c2;line-height:1.4}
@@ -146,6 +147,7 @@ const CLOUD = {
 };
 
 /* ================= 基本設定 ================= */
+const APP_VERSION = '1.2.0 (2026-11-20)';
 const qs = new URLSearchParams(location.search);
 let MODE = (qs.get('mode') || 'home').toLowerCase();
 const $ = (s, r = document) => r.querySelector(s);
@@ -219,8 +221,8 @@ const PRESETS = [
   ['STEMI', { rhythm: 'sinus', hr: 92, ectopy: 'pvc_single', stMode: 'up', stMm: 3, sbp: 104, dbp: 70, spo2: 95, rr: 22, etco2: 34, pulse: 'auto' }],
   ['低酸素', { rhythm: 'stach', hr: 118, ectopy: 'none', stMode: 'down', stMm: 1.5, sbp: 146, dbp: 92, spo2: 84, rr: 32, etco2: 30, pulse: 'auto' }],
   ['完全AVB', { rhythm: 'avb3', hr: 34, ectopy: 'none', stMode: 'none', sbp: 84, dbp: 50, spo2: 95, rr: 18, pulse: 'auto' }],
-  ['VF', { rhythm: 'vf_c', ectopy: 'none', stMode: 'none', pulse: 'auto' }],
-  ['心静止', { rhythm: 'asys', ectopy: 'none', stMode: 'none', pulse: 'auto' }],
+  ['VF', { rhythm: 'vf_c', ectopy: 'none', stMode: 'none', rr: 0, pulse: 'auto' }],
+  ['心静止', { rhythm: 'asys', ectopy: 'none', stMode: 'none', rr: 0, pulse: 'auto' }],
   ['ROSC', { rhythm: 'sinus', hr: 108, ectopy: 'pvc_single', stMode: 'none', sbp: 96, dbp: 58, spo2: 93, rr: 12, etco2On: true, etco2: 42, pulse: 'auto' }],
 ];
 const fullState = s => {
@@ -979,6 +981,7 @@ ${Sync.cloudOn && MODE !== 'demo' ? `<section><h3>クラウド同期（インタ
     <div class="f"><span class="l">BED表示</span><input type="text" id="f-bed" style="flex:1;background:#0b0f15;color:#fff;border:1px solid #2d3949;border-radius:8px;font-size:16px;padding:9px 10px"></div>
   </details>
 </section>
+<p style="text-align:center;font-size:11px;color:#6f8297;margin:4px 0 0">バージョン ${APP_VERSION}</p>
 <div class="cbar"><div class="st" id="cSt">未反映</div><button class="sil" type="button" id="bSil">消音</button><button class="apply" type="button" id="bApply">反映</button></div>`;
 
 class Control {
@@ -989,7 +992,7 @@ class Control {
     const pr = root.querySelector('#presets');
     PRESETS.forEach(([name, p]) => {
       const b = document.createElement('button'); b.type = 'button'; b.textContent = name;
-      b.onclick = () => { this.fill(Object.assign(this.read(), p)); this.setDirty(true); };
+      b.onclick = () => { this.fill(Object.assign(this.read(), p)); this.setDirty(true); pr.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); };
       pr.appendChild(b);
     });
     root.addEventListener('click', e => {
@@ -1001,9 +1004,14 @@ class Control {
       inp.value = Math.round(v * 10) / 10; this.setDirty(true);
     });
     root.addEventListener('input', e => { if (e.target.matches('input,select')) this.setDirty(true); });
+    this.g('rhythm').addEventListener('focus', () => { this.prevRhythm = this.g('rhythm').value; });
     this.g('rhythm').addEventListener('change', () => {
       const r = this.g('rhythm').value, inf = RINFO[r];
       if (inf && !NO_HR.has(r)) this.g('hr').value = inf.hr;
+      const rrEl = this.g('rr');
+      if (PULSELESS.has(r)) { if (parseFloat(rrEl.value) > 0) this.rrSaved = rrEl.value; rrEl.value = 0; }
+      else if (PULSELESS.has(this.prevRhythm) && parseFloat(rrEl.value) === 0 && this.rrSaved) rrEl.value = this.rrSaved;
+      this.prevRhythm = r;
       this.sync();
     });
     ['etco2On', 'stMode'].forEach(k => this.g(k).addEventListener('change', () => this.sync()));
@@ -1050,6 +1058,7 @@ class Control {
   sync() {
     const r = this.g('rhythm').value;
     this.root.querySelector('#rHint').textContent = (RINFO[r] && RINFO[r].hint) || '';
+    this.prevRhythm = r;
     this.g('hr').disabled = NO_HR.has(r);
     this.g('ectopy').disabled = !ECT_OK.has(r);
     this.g('stMm').disabled = this.g('stMode').value === 'none';
@@ -1093,6 +1102,7 @@ class Control {
     this.lastSent = { state: s, rev: Date.now() }; store.set('ems-bsm-lastsent', this.lastSent);
     Sync.send({ type: 'state', state: s, rev: this.lastSent.rev });
     this.setDirty(false);
+    this.root.querySelectorAll('#presets button.active').forEach(x => x.classList.remove('active'));
     const d = new Date();
     this.root.querySelector('#cSt').textContent = '✓ 反映しました ' + hhmm(d) + ':' + pad2(d.getSeconds()) + '　' + RINFO[s.rhythm].label;
   }
@@ -1127,7 +1137,7 @@ if (MODE === 'monitor') {
     <a class="hbtn ctl" href="?mode=control"><b>操作画面</b><span>スマホ・PCで数値を入力する側</span></a>
     <button class="hbtn demo" type="button" id="hDemo"><b>デモ（1画面）</b><span>モニターと操作パネルを1画面で試す</span></button>
     <p class="note">${Sync.cloudOn ? '● クラウド同期：設定済み（別々の端末で使えます）' : '○ クラウド同期：未設定（同じ端末・同じブラウザ内で同期）'}</p>
-    <p class="note">訓練・教育用シミュレーターです。医療機器ではありません。</p>`;
+    <p class="note">訓練・教育用シミュレーターです。医療機器ではありません。</p><p class="note">バージョン ${APP_VERSION}</p>`;
   document.body.appendChild(h);
   h.querySelector('#hDemo').onclick = () => { h.remove(); document.body.classList.remove('m-home'); MODE = 'demo'; document.body.classList.add('m-demo'); startDemo(); };
 }
